@@ -4,9 +4,20 @@ const cors = require("cors");
 const pool = require("./db");
 
 // middleware
+const allowedOrigins = [
+  "http://localhost:3000", // Development
+  "https://forms-project-c77c1.web.app", // Production
+];
+
 app.use(
   cors({
-    origin: "https://forms-project-c77c1.web.app", // Replace with your frontend's actual URL
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -14,6 +25,12 @@ app.use(
 app.use(express.json());
 
 // ROUTES 
+
+app.use((req, res, next) => {
+  console.log("Origin:", req.headers.origin);
+  next();
+});
+
 
 // register user
 
