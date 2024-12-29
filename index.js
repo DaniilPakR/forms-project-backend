@@ -4,7 +4,13 @@ const cors = require("cors");
 const pool = require("./db");
 
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://forms-project-c77c1.web.app", // Replace with your frontend's actual URL
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // ROUTES 
