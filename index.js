@@ -117,7 +117,8 @@ app.post("/forms/create", async (req, res) => {
       pageId,
       titlemarkdown,
       tags,
-      usersWithAccess
+      usersWithAccess,
+      formType
     } = req.body;
 
     if (!title || !creatorId || !questions || questions.length === 0) {
@@ -128,23 +129,23 @@ app.post("/forms/create", async (req, res) => {
 
     // Insert the form into the "forms" table
     const newForm = await pool.query(
-      `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9) 
+      `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown, form_type) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9, $10) 
        RETURNING form_id`,
-      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown]
+      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown, formType]
     );
 
     const formId = newForm.rows[0].form_id;
 
     // Insert questions into the "questions" table
     for (const question of questions) {
-      const { questionTitle, questionType, required, options, showInResults } = question;
+      const { questionTitle, questionType, required, options, showInResults, is_with_score, score, correct_answer } = question;
 
       const newQuestion = await pool.query(
-        `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
+        `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
          RETURNING question_id`,
-        [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults]
+        [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
       );
 
       const questionId = newQuestion.rows[0].question_id;
@@ -153,9 +154,9 @@ app.post("/forms/create", async (req, res) => {
       if (options && options.length > 0) {
         for (const option of options) {
           await pool.query(
-            `INSERT INTO answer_options (question_id, option_text, position) 
-             VALUES ($1, $2, $3)`,
-            [questionId, option.optionText, options.indexOf(option) + 1]
+            `INSERT INTO answer_options (question_id, option_text, position, is_correct) 
+             VALUES ($1, $2, $3, $4)`,
+            [questionId, option.optionText, options.indexOf(option) + 1, option.is_correct]
           );
         }
       }
@@ -430,8 +431,8 @@ app.get("/eform/:page_id", async (req, res) => {
     const query = `
       SELECT 
         f.form_id, f.page_id, f.title, f.description, f.descriptionMarkdown, f.topic, f.image, f.is_public, 
-        f.creator_id, f.created_at, f.updated_at, f.titlemarkdown,
-        q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results,
+        f.creator_id, f.created_at, f.updated_at, f.titlemarkdown, f.form_type,
+        q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results, q.is_with_score, q.score, q.correct_answer,
         ao.option_id, ao.option_text, ao.position AS option_position, ao.is_correct,
         ft.tag_id, t.tag_text,
         ac.user_id AS access_user_id, u.user_email AS access_user_email, u.user_name AS access_user_name
@@ -466,6 +467,7 @@ app.get("/eform/:page_id", async (req, res) => {
       created_at: result.rows[0].created_at,
       updated_at: result.rows[0].updated_at,
       titleMarkdown: result.rows[0].titlemarkdown,
+      form_type: result.rows[0].form_type,
       tags: [],
       questions: [],
       users_with_access: []
@@ -486,6 +488,9 @@ app.get("/eform/:page_id", async (req, res) => {
             is_required: row.is_required,
             position: row.position,
             show_in_results: row.show_in_results,
+            is_with_score: row.is_with_score,
+            score: row.score,
+            correct_answer: row.correct_answer,
             options: []
           });
 
