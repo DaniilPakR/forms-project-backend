@@ -543,6 +543,7 @@ app.put("/forms/edit/:formId", async (req, res) => {
     imageUrl,
     isPublic,
     creatorId,
+    form_type,
     questions,
     pageId,
     tags, // array of tags as strings
@@ -562,9 +563,9 @@ app.put("/forms/edit/:formId", async (req, res) => {
     await pool.query(
       `UPDATE forms 
        SET title = $1, titlemarkdown = $2, description = $3, descriptionmarkdown = $4, topic = $5, image = $6, 
-           is_public = $7, updated_at = NOW(), page_id = $8 
-       WHERE form_id = $9`,
-      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, formId]
+           is_public = $7, updated_at = NOW(), page_id = $8, form_type = $9
+       WHERE form_id = $10`,
+      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, form_type, formId]
     );
 
     if (isPublic) {
@@ -667,23 +668,23 @@ app.put("/forms/edit/:formId", async (req, res) => {
     }
 
     for (const question of questions) {
-      const { questionId, questionTitle, questionType, required, options, showInResults } = question;
+      const { questionId, questionTitle, questionType, required, options, showInResults, is_with_score, score, correct_answer } = question;
 
       let newQuestionId = questionId;
 
       if (questionId && existingQuestionIds.includes(questionId)) {
         await pool.query(
           `UPDATE questions 
-           SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5 
-           WHERE question_id = $6`,
-          [questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, questionId]
+           SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5, is_with_score = $6, score = $7, correct_answer = $8 
+           WHERE question_id = $9`,
+          [questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer, questionId]
         );
       } else {
         const newQuestion = await pool.query(
-          `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results) 
+          `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
            VALUES ($1, $2, $3, $4, $5, $6) 
            RETURNING question_id`,
-          [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults]
+          [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
         );
         newQuestionId = newQuestion.rows[0].question_id;
       }
@@ -700,20 +701,20 @@ app.put("/forms/edit/:formId", async (req, res) => {
       }
 
       for (const option of options) {
-        const { optionId, optionText } = option;
+        const { optionId, optionText, is_correct } = option;
 
         if (optionId && existingOptionIds.includes(optionId)) {
           await pool.query(
             `UPDATE answer_options 
-             SET option_text = $1, position = $2 
-             WHERE option_id = $3`,
-            [optionText, options.indexOf(option) + 1, optionId]
+             SET option_text = $1, position = $2, is_correct = $3
+             WHERE option_id = $4`,
+            [optionText, options.indexOf(option) + 1, is_correct, optionId]
           );
         } else {
           await pool.query(
-            `INSERT INTO answer_options (question_id, option_text, position) 
-             VALUES ($1, $2, $3)`,
-            [newQuestionId, optionText, options.indexOf(option) + 1]
+            `INSERT INTO answer_options (question_id, option_text, position, is_correct) 
+             VALUES ($1, $2, $3, $4)`,
+            [newQuestionId, optionText, options.indexOf(option) + 1, is_correct]
           );
         }
       }
