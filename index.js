@@ -584,39 +584,41 @@ app.put("/forms/edit/:formId", async (req, res) => {
   const { formId } = req.params;
   const {
     title,
-    titlemarkdown,
+    titlemarkdown = [], // Default to empty array
     description,
-    descriptionmarkdown,
+    descriptionmarkdown = [], // Default to empty array
     topic,
-    imageUrl,
+    imageUrl = null, // Default to null if falsy
     isPublic,
     creatorId,
     form_type,
-    questions,
+    questions = [], // Default to empty array
     pageId,
-    tags, // array of tags as strings
-    accessControlUsers,
+    tags: inputTags = [], // Default to empty array
+    accessControlUsers: inputAccessControlUsers = [], // Default to empty array
   } = req.body;
 
+  // Validate and sanitize inputs
+  const tags = Array.isArray(inputTags) ? inputTags : [];
+  const accessControlUsers = Array.isArray(inputAccessControlUsers)
+    ? inputAccessControlUsers.map(String) // Ensure all IDs are strings
+    : [];
+
   try {
+    // Basic validations
     if (
       !formId ||
       !title ||
       !Array.isArray(titlemarkdown) ||
       !creatorId ||
-      !questions ||
+      !Array.isArray(questions) ||
       questions.length === 0
     ) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Form ID, Title, TitleMarkdown, creatorId, and questions are required.",
-        });
+      return res.status(400).json({
+        error:
+          "Form ID, Title, TitleMarkdown, creatorId, and questions are required.",
+      });
     }
-
-    const tags = req.body.tags || [];
-    const accessControlUsers = req.body.accessControlUsers || [];
 
     await pool.query("BEGIN");
 
@@ -640,13 +642,13 @@ app.put("/forms/edit/:formId", async (req, res) => {
       ]
     );
 
+    // Handle access control logic
     if (isPublic) {
       // If public, remove all users from the access_control table for this form
       await pool.query(`DELETE FROM access_control WHERE form_id = $1`, [
         formId,
       ]);
     } else {
-      // Fetch existing access control users
       const existingAccessUsers = await pool.query(
         `SELECT user_id FROM access_control WHERE form_id = $1`,
         [formId]
@@ -655,7 +657,6 @@ app.put("/forms/edit/:formId", async (req, res) => {
         (row) => row.user_id
       );
 
-      // Determine users to add and remove
       const usersToAdd = accessControlUsers.filter(
         (userId) => !existingUserIds.includes(userId)
       );
@@ -663,7 +664,6 @@ app.put("/forms/edit/:formId", async (req, res) => {
         (userId) => !accessControlUsers.includes(userId)
       );
 
-      // Add new users
       for (const userId of usersToAdd) {
         await pool.query(
           `INSERT INTO access_control (form_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -671,7 +671,6 @@ app.put("/forms/edit/:formId", async (req, res) => {
         );
       }
 
-      // Remove users no longer authorized
       if (usersToRemove.length > 0) {
         await pool.query(
           `DELETE FROM access_control WHERE form_id = $1 AND user_id = ANY($2::uuid[])`,
@@ -680,7 +679,7 @@ app.put("/forms/edit/:formId", async (req, res) => {
       }
     }
 
-    // Fetch existing form_tags
+    // Handle tags logic
     const existingTags = await pool.query(
       `SELECT t.tag_id, t.tag_text 
        FROM tags t 
@@ -688,14 +687,11 @@ app.put("/forms/edit/:formId", async (req, res) => {
        WHERE ft.form_id = $1`,
       [formId]
     );
-
     const existingTagNames = existingTags.rows.map((tag) => tag.tag_text);
 
-    // Identify tags to add and remove
     const newTags = tags.filter((tag) => !existingTagNames.includes(tag));
     const removedTags = existingTagNames.filter((tag) => !tags.includes(tag));
 
-    // Remove tags not in the update
     if (removedTags.length > 0) {
       await pool.query(
         `DELETE FROM form_tags 
@@ -706,11 +702,9 @@ app.put("/forms/edit/:formId", async (req, res) => {
       );
     }
 
-    // Add new tags
     for (const tagName of newTags) {
       let tagId;
 
-      // Check if the tag already exists
       const existingTag = await pool.query(
         `SELECT tag_id FROM tags WHERE tag_text = $1`,
         [tagName]
@@ -719,7 +713,6 @@ app.put("/forms/edit/:formId", async (req, res) => {
       if (existingTag.rows.length > 0) {
         tagId = existingTag.rows[0].tag_id;
       } else {
-        // Create the tag if it doesn't exist
         const newTag = await pool.query(
           `INSERT INTO tags (tag_text) VALUES ($1) RETURNING tag_id`,
           [tagName]
@@ -727,14 +720,13 @@ app.put("/forms/edit/:formId", async (req, res) => {
         tagId = newTag.rows[0].tag_id;
       }
 
-      // Link the tag to the form
       await pool.query(
         `INSERT INTO form_tags (form_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [formId, tagId]
       );
     }
 
-    // Process questions (remains the same)
+    // Handle questions logic
     const existingQuestions = await pool.query(
       `SELECT question_id FROM questions WHERE form_id = $1`,
       [formId]
@@ -742,6 +734,7 @@ app.put("/forms/edit/:formId", async (req, res) => {
     const existingQuestionIds = existingQuestions.rows.map(
       (q) => q.question_id
     );
+
     const updatedQuestionIds = questions
       .map((q) => q.questionId)
       .filter(Boolean);
@@ -762,10 +755,10 @@ app.put("/forms/edit/:formId", async (req, res) => {
         questionTitle,
         questionType,
         required,
-        options,
+        options = [],
         showInResults,
         is_with_score,
-        score,
+        score = 0, // Default score to 0
         correct_answer,
       } = question;
 
@@ -774,7 +767,8 @@ app.put("/forms/edit/:formId", async (req, res) => {
       if (questionId && existingQuestionIds.includes(questionId)) {
         await pool.query(
           `UPDATE questions 
-           SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5, is_with_score = $6, score = $7, correct_answer = $8 
+           SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5, 
+               is_with_score = $6, score = $7, correct_answer = $8 
            WHERE question_id = $9`,
           [
             questionTitle,
@@ -784,13 +778,14 @@ app.put("/forms/edit/:formId", async (req, res) => {
             showInResults,
             is_with_score,
             score,
-            correct_answer,
+            correct_answer || null, // Save as null if empty
             questionId,
           ]
         );
       } else {
         const newQuestion = await pool.query(
-          `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
+          `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, 
+                                   is_with_score, score, correct_answer) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
            RETURNING question_id`,
           [
@@ -802,7 +797,7 @@ app.put("/forms/edit/:formId", async (req, res) => {
             showInResults,
             is_with_score,
             score,
-            correct_answer,
+            correct_answer || null,
           ]
         );
         newQuestionId = newQuestion.rows[0].question_id;
@@ -833,13 +828,13 @@ app.put("/forms/edit/:formId", async (req, res) => {
             `UPDATE answer_options 
              SET option_text = $1, position = $2, is_correct = $3
              WHERE option_id = $4`,
-            [optionText, options.indexOf(option) + 1, is_correct, optionId]
+            [optionText, options.indexOf(option) + 1, !!is_correct, optionId]
           );
         } else {
           await pool.query(
             `INSERT INTO answer_options (question_id, option_text, position, is_correct) 
              VALUES ($1, $2, $3, $4)`,
-            [newQuestionId, optionText, options.indexOf(option) + 1, is_correct]
+            [newQuestionId, optionText, options.indexOf(option) + 1, !!is_correct]
           );
         }
       }
