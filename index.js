@@ -24,13 +24,12 @@ app.use(
 );
 app.use(express.json());
 
-// ROUTES 
+// ROUTES
 
 app.use((req, res, next) => {
   console.log("Origin:", req.headers.origin);
   next();
 });
-
 
 // register user
 
@@ -39,7 +38,9 @@ app.post("/auth/register", async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ error: "Name, email, and password are required" });
+      return res
+        .status(400)
+        .json({ error: "Name, email, and password are required" });
     }
 
     const newUser = await pool.query(
@@ -73,10 +74,9 @@ app.post("/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await pool.query(
-      "SELECT * FROM users WHERE user_email = $1",
-      [email]
-    );
+    const user = await pool.query("SELECT * FROM users WHERE user_email = $1", [
+      email,
+    ]);
 
     if (user.rows.length === 0) {
       return res.status(401).json({ error: "Invalid email or password" });
@@ -118,7 +118,7 @@ app.post("/forms/create", async (req, res) => {
       titlemarkdown,
       tags,
       usersWithAccess,
-      formType
+      formType,
     } = req.body;
 
     if (!title || !creatorId || !questions || questions.length === 0) {
@@ -132,20 +132,50 @@ app.post("/forms/create", async (req, res) => {
       `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown, form_type) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9, $10) 
        RETURNING form_id`,
-      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown, formType]
+      [
+        title,
+        description,
+        descriptionmarkdown,
+        topic,
+        imageUrl,
+        isPublic,
+        creatorId,
+        pageId,
+        titlemarkdown,
+        formType,
+      ]
     );
 
     const formId = newForm.rows[0].form_id;
 
     // Insert questions into the "questions" table
     for (const question of questions) {
-      const { questionTitle, questionType, required, options, showInResults, is_with_score, score, correct_answer } = question;
+      const {
+        questionTitle,
+        questionType,
+        required,
+        options,
+        showInResults,
+        is_with_score,
+        score,
+        correct_answer,
+      } = question;
 
       const newQuestion = await pool.query(
         `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
          RETURNING question_id`,
-        [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
+        [
+          formId,
+          questionTitle,
+          questionType,
+          required,
+          questions.indexOf(question) + 1,
+          showInResults,
+          is_with_score,
+          score,
+          correct_answer,
+        ]
       );
 
       const questionId = newQuestion.rows[0].question_id;
@@ -156,7 +186,12 @@ app.post("/forms/create", async (req, res) => {
           await pool.query(
             `INSERT INTO answer_options (question_id, option_text, position, is_correct) 
              VALUES ($1, $2, $3, $4)`,
-            [questionId, option.optionText, options.indexOf(option) + 1, option.is_correct]
+            [
+              questionId,
+              option.optionText,
+              options.indexOf(option) + 1,
+              option.is_correct,
+            ]
           );
         }
       }
@@ -180,7 +215,10 @@ app.post("/forms/create", async (req, res) => {
       if (newTags.length > 0) {
         const newTagInserts = await Promise.all(
           newTags.map((tag) =>
-            pool.query(`INSERT INTO tags (tag_text) VALUES ($1) RETURNING tag_id`, [tag])
+            pool.query(
+              `INSERT INTO tags (tag_text) VALUES ($1) RETURNING tag_id`,
+              [tag]
+            )
           )
         );
         newTagIds = newTagInserts.map((result) => result.rows[0].tag_id);
@@ -222,13 +260,18 @@ app.post("/forms/create", async (req, res) => {
       if (userIds.length !== usersWithAccess.length) {
         return res
           .status(400)
-          .json({ error: "Some user emails do not correspond to registered users." });
+          .json({
+            error: "Some user emails do not correspond to registered users.",
+          });
       }
 
       // Insert rows into the access_control table
       await Promise.all(
         userIds.map((userId) =>
-          pool.query(`INSERT INTO access_control (form_id, user_id) VALUES ($1, $2)`, [formId, userId])
+          pool.query(
+            `INSERT INTO access_control (form_id, user_id) VALUES ($1, $2)`,
+            [formId, userId]
+          )
         )
       );
     }
@@ -240,19 +283,18 @@ app.post("/forms/create", async (req, res) => {
   }
 });
 
-
 app.get("/users/get", async (req, res) => {
   try {
-    const users = await pool.query("SELECT * FROM users")
+    const users = await pool.query("SELECT * FROM users");
     res.json({
       message: "Users retrieved successfully",
-      users: users.rows
-    })
+      users: users.rows,
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Internal server error." });
   }
-})
+});
 
 // DELETE route for deleting users
 app.delete("/users/delete", async (req, res) => {
@@ -322,7 +364,7 @@ app.get("/latest/forms", async (req, res) => {
 
     res.json({
       message: "Latest forms retrieved successfully",
-      forms: latestForms.rows
+      forms: latestForms.rows,
     });
   } catch (error) {
     console.error("Error fetching latest forms:", error.message);
@@ -344,7 +386,7 @@ app.get("/popular/forms", async (req, res) => {
 
     res.json({
       message: "Top 5 popular forms retrieved successfully",
-      forms: popularForms.rows
+      forms: popularForms.rows,
     });
   } catch (error) {
     console.error("Error fetching popular forms:", error.message);
@@ -363,7 +405,7 @@ app.get("/tags", async (req, res) => {
 
     res.json({
       message: "Tags retrieved successfully",
-      tags: tags.rows
+      tags: tags.rows,
     });
   } catch (error) {
     console.error("Error fetching tags:", error.message);
@@ -387,7 +429,7 @@ app.get("/tags/:tagId/forms", async (req, res) => {
 
     res.json({
       message: "Forms retrieved successfully for the tag",
-      forms: forms.rows
+      forms: forms.rows,
     });
   } catch (error) {
     console.error("Error fetching forms for the tag:", error.message);
@@ -450,7 +492,9 @@ app.get("/eform/:page_id", async (req, res) => {
     const result = await pool.query(query, [page_id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "No form found with the given page_id" });
+      return res
+        .status(404)
+        .json({ error: "No form found with the given page_id" });
     }
 
     // Transform the result into a nested structure
@@ -470,14 +514,14 @@ app.get("/eform/:page_id", async (req, res) => {
       form_type: result.rows[0].form_type,
       tags: [],
       questions: [],
-      users_with_access: []
+      users_with_access: [],
     };
 
     const questionMap = new Map();
     const tagSet = new Set();
     const accessUserSet = new Set();
 
-    result.rows.forEach(row => {
+    result.rows.forEach((row) => {
       // Process questions
       if (row.question_id) {
         if (!questionMap.has(row.question_id)) {
@@ -492,7 +536,7 @@ app.get("/eform/:page_id", async (req, res) => {
             score: row.score,
             correct_answer: row.correct_answer,
             format: row.format,
-            options: []
+            options: [],
           });
 
           form.questions.push(questionMap.get(row.question_id));
@@ -503,7 +547,7 @@ app.get("/eform/:page_id", async (req, res) => {
             option_id: row.option_id,
             option_text: row.option_text,
             position: row.option_position,
-            is_correct: row.is_correct
+            is_correct: row.is_correct,
           });
         }
       }
@@ -515,7 +559,11 @@ app.get("/eform/:page_id", async (req, res) => {
       }
 
       // Process users with access
-      if (!form.is_public && row.access_user_id && !accessUserSet.has(row.access_user_id)) {
+      if (
+        !form.is_public &&
+        row.access_user_id &&
+        !accessUserSet.has(row.access_user_id)
+      ) {
         accessUserSet.add(row.access_user_id);
         form.users_with_access.push({
           user_id: row.access_user_id,
@@ -547,15 +595,28 @@ app.put("/forms/edit/:formId", async (req, res) => {
     questions,
     pageId,
     tags, // array of tags as strings
-    accessControlUsers
+    accessControlUsers,
   } = req.body;
 
   try {
-    if (!formId || !title || !titlemarkdown || !creatorId || !questions || questions.length === 0) {
+    if (
+      !formId ||
+      !title ||
+      !Array.isArray(titlemarkdown) ||
+      !creatorId ||
+      !questions ||
+      questions.length === 0
+    ) {
       return res
         .status(400)
-        .json({ error: "Form ID, Title, TitleMarkdown, creatorId, and questions are required." });
+        .json({
+          error:
+            "Form ID, Title, TitleMarkdown, creatorId, and questions are required.",
+        });
     }
+
+    const tags = req.body.tags || [];
+    const accessControlUsers = req.body.accessControlUsers || [];
 
     await pool.query("BEGIN");
 
@@ -565,23 +626,42 @@ app.put("/forms/edit/:formId", async (req, res) => {
        SET title = $1, titlemarkdown = $2, description = $3, descriptionmarkdown = $4, topic = $5, image = $6, 
            is_public = $7, updated_at = NOW(), page_id = $8, form_type = $9
        WHERE form_id = $10`,
-      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, form_type, formId]
+      [
+        title,
+        titlemarkdown,
+        description,
+        descriptionmarkdown,
+        topic,
+        imageUrl,
+        isPublic,
+        pageId,
+        form_type,
+        formId,
+      ]
     );
 
     if (isPublic) {
       // If public, remove all users from the access_control table for this form
-      await pool.query(`DELETE FROM access_control WHERE form_id = $1`, [formId]);
+      await pool.query(`DELETE FROM access_control WHERE form_id = $1`, [
+        formId,
+      ]);
     } else {
       // Fetch existing access control users
       const existingAccessUsers = await pool.query(
         `SELECT user_id FROM access_control WHERE form_id = $1`,
         [formId]
       );
-      const existingUserIds = existingAccessUsers.rows.map(row => row.user_id);
+      const existingUserIds = existingAccessUsers.rows.map(
+        (row) => row.user_id
+      );
 
       // Determine users to add and remove
-      const usersToAdd = accessControlUsers.filter(userId => !existingUserIds.includes(userId));
-      const usersToRemove = existingUserIds.filter(userId => !accessControlUsers.includes(userId));
+      const usersToAdd = accessControlUsers.filter(
+        (userId) => !existingUserIds.includes(userId)
+      );
+      const usersToRemove = existingUserIds.filter(
+        (userId) => !accessControlUsers.includes(userId)
+      );
 
       // Add new users
       for (const userId of usersToAdd) {
@@ -609,11 +689,11 @@ app.put("/forms/edit/:formId", async (req, res) => {
       [formId]
     );
 
-    const existingTagNames = existingTags.rows.map(tag => tag.tag_text);
+    const existingTagNames = existingTags.rows.map((tag) => tag.tag_text);
 
     // Identify tags to add and remove
-    const newTags = tags.filter(tag => !existingTagNames.includes(tag));
-    const removedTags = existingTagNames.filter(tag => !tags.includes(tag));
+    const newTags = tags.filter((tag) => !existingTagNames.includes(tag));
+    const removedTags = existingTagNames.filter((tag) => !tags.includes(tag));
 
     // Remove tags not in the update
     if (removedTags.length > 0) {
@@ -659,16 +739,35 @@ app.put("/forms/edit/:formId", async (req, res) => {
       `SELECT question_id FROM questions WHERE form_id = $1`,
       [formId]
     );
-    const existingQuestionIds = existingQuestions.rows.map(q => q.question_id);
-    const updatedQuestionIds = questions.map(q => q.questionId).filter(Boolean);
+    const existingQuestionIds = existingQuestions.rows.map(
+      (q) => q.question_id
+    );
+    const updatedQuestionIds = questions
+      .map((q) => q.questionId)
+      .filter(Boolean);
 
-    const questionsToDelete = existingQuestionIds.filter(qId => !updatedQuestionIds.includes(qId));
+    const questionsToDelete = existingQuestionIds.filter(
+      (qId) => !updatedQuestionIds.includes(qId)
+    );
     if (questionsToDelete.length > 0) {
-      await pool.query(`DELETE FROM questions WHERE question_id = ANY($1::int[])`, [questionsToDelete]);
+      await pool.query(
+        `DELETE FROM questions WHERE question_id = ANY($1::int[])`,
+        [questionsToDelete]
+      );
     }
 
     for (const question of questions) {
-      const { questionId, questionTitle, questionType, required, options, showInResults, is_with_score, score, correct_answer } = question;
+      const {
+        questionId,
+        questionTitle,
+        questionType,
+        required,
+        options,
+        showInResults,
+        is_with_score,
+        score,
+        correct_answer,
+      } = question;
 
       let newQuestionId = questionId;
 
@@ -677,27 +776,53 @@ app.put("/forms/edit/:formId", async (req, res) => {
           `UPDATE questions 
            SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5, is_with_score = $6, score = $7, correct_answer = $8 
            WHERE question_id = $9`,
-          [questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer, questionId]
+          [
+            questionTitle,
+            questionType,
+            required,
+            questions.indexOf(question) + 1,
+            showInResults,
+            is_with_score,
+            score,
+            correct_answer,
+            questionId,
+          ]
         );
       } else {
         const newQuestion = await pool.query(
           `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
            RETURNING question_id`,
-          [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
+          [
+            formId,
+            questionTitle,
+            questionType,
+            required,
+            questions.indexOf(question) + 1,
+            showInResults,
+            is_with_score,
+            score,
+            correct_answer,
+          ]
         );
         newQuestionId = newQuestion.rows[0].question_id;
       }
 
       const existingOptions = await pool.query(
-        `SELECT option_id FROM answer_options WHERE question_id = $1`, [newQuestionId]
+        `SELECT option_id FROM answer_options WHERE question_id = $1`,
+        [newQuestionId]
       );
-      const existingOptionIds = existingOptions.rows.map(o => o.option_id);
-      const updatedOptionIds = options.map(o => o.optionId).filter(Boolean);
+      const existingOptionIds = existingOptions.rows.map((o) => o.option_id);
+      const updatedOptionIds = options.map((o) => o.optionId).filter(Boolean);
 
-      const optionsToDelete = existingOptionIds.filter(oId => !updatedOptionIds.includes(oId));
+      const optionsToDelete = existingOptionIds.filter(
+        (oId) => !updatedOptionIds.includes(oId)
+      );
       if (optionsToDelete.length > 0) {
-        await pool.query(`DELETE FROM answer_options WHERE option_id = ANY($1::int[])`, [optionsToDelete]);
+        await pool.query(
+          `DELETE FROM answer_options WHERE option_id = ANY($1::int[])`,
+          [optionsToDelete]
+        );
       }
 
       for (const option of options) {
@@ -729,10 +854,7 @@ app.put("/forms/edit/:formId", async (req, res) => {
   }
 });
 
-
-
-
-app.get('/tables', async (req, res) => {
+app.get("/tables", async (req, res) => {
   try {
     const result = await pool.query(
       `
@@ -743,7 +865,7 @@ app.get('/tables', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).send('Error fetching table structures');
+    res.status(500).send("Error fetching table structures");
   }
 });
 
@@ -774,11 +896,19 @@ app.post("/filled-forms/submit", async (req, res) => {
       await pool.query(
         `INSERT INTO answers (filled_form_id, question_id, answer_text, answer_value, question_type, created_at  ) 
          VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [filledFormId, question_id, answer_text || null, JSON.stringify(answer_value) || null, question_type ]
+        [
+          filledFormId,
+          question_id,
+          answer_text || null,
+          JSON.stringify(answer_value) || null,
+          question_type,
+        ]
       );
     }
 
-    res.status(201).json({ message: "Form submitted successfully.", filledFormId });
+    res
+      .status(201)
+      .json({ message: "Form submitted successfully.", filledFormId });
   } catch (error) {
     console.error("Error submitting filled form:", error.message);
     res.status(500).json({ error: "Internal server error." });
@@ -809,13 +939,17 @@ app.get("/filled-forms/:user_id", async (req, res) => {
     const result = await pool.query(query, [user_id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No filled forms found for this user." });
+      return res
+        .status(404)
+        .json({ message: "No filled forms found for this user." });
     }
 
     res.status(200).json({ filledForms: result.rows });
   } catch (err) {
     console.error("Error fetching filled forms:", err);
-    res.status(500).json({ error: "An error occurred while fetching filled forms." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching filled forms." });
   }
 });
 
@@ -825,7 +959,9 @@ app.get("/likes/check", async (req, res) => {
 
     // Validate query parameters
     if (!userId || !formId) {
-      return res.status(400).json({ error: "User ID and Form ID are required." });
+      return res
+        .status(400)
+        .json({ error: "User ID and Form ID are required." });
     }
 
     // Query the database to check if the like exists
@@ -853,7 +989,9 @@ app.post("/likes/add", async (req, res) => {
     const { form_id, user_id } = req.body;
 
     if (!form_id || !user_id) {
-      return res.status(400).json({ error: "Form ID and User ID are required." });
+      return res
+        .status(400)
+        .json({ error: "Form ID and User ID are required." });
     }
 
     await pool.query(
@@ -914,7 +1052,9 @@ app.delete("/likes/delete", async (req, res) => {
 
     // Validate input
     if (!user_id || !form_id) {
-      return res.status(400).json({ error: "User ID and Form ID are required." });
+      return res
+        .status(400)
+        .json({ error: "User ID and Form ID are required." });
     }
 
     // Delete the like
@@ -940,7 +1080,9 @@ app.post("/comments/add", async (req, res) => {
     const { form_id, user_id, comment_text, user_name } = req.body;
 
     if (!form_id || !user_id || !comment_text || !user_name) {
-      return res.status(400).json({ error: "Form ID, User ID, and comment text are required." });
+      return res
+        .status(400)
+        .json({ error: "Form ID, User ID, and comment text are required." });
     }
 
     await pool.query(
@@ -998,7 +1140,9 @@ app.get("/comments/:formId", async (req, res) => {
     );
 
     if (comments.rows.length === 0) {
-      return res.status(404).json({ message: "No comments found for this form." });
+      return res
+        .status(404)
+        .json({ message: "No comments found for this form." });
     }
 
     res.status(200).json(comments.rows);
@@ -1008,7 +1152,7 @@ app.get("/comments/:formId", async (req, res) => {
   }
 });
 
-app.get('/tables', async (req, res) => {
+app.get("/tables", async (req, res) => {
   try {
     const result = await pool.query(
       `
@@ -1019,7 +1163,7 @@ app.get('/tables', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).send('Error fetching table structures');
+    res.status(500).send("Error fetching table structures");
   }
 });
 
@@ -1079,16 +1223,17 @@ app.get("/forms/:formId/details", async (req, res) => {
     );
 
     if (filledForms.rows.length === 0) {
-      return res.status(404).json({ message: "No filled form exists for this form." });
+      return res
+        .status(404)
+        .json({ message: "No filled form exists for this form." });
     }
 
     const filledForm = filledForms.rows[0];
 
     // 2. Retrieve form details
-    const form = await pool.query(
-      `SELECT * FROM forms WHERE form_id = $1`,
-      [formId]
-    );
+    const form = await pool.query(`SELECT * FROM forms WHERE form_id = $1`, [
+      formId,
+    ]);
 
     // 3. Retrieve questions for the form
     const questions = await pool.query(
@@ -1101,7 +1246,9 @@ app.get("/forms/:formId/details", async (req, res) => {
     let answerOptions = [];
 
     if (questionIds.length > 0) {
-      const placeholders = questionIds.map((_, index) => `$${index + 1}`).join(", ");
+      const placeholders = questionIds
+        .map((_, index) => `$${index + 1}`)
+        .join(", ");
       const query = `SELECT * FROM answer_options WHERE question_id IN (${placeholders})`;
       answerOptions = await pool.query(query, questionIds);
     }
@@ -1119,10 +1266,9 @@ app.get("/forms/:formId/details", async (req, res) => {
     );
 
     // 7. Retrieve likes for the form
-    const likes = await pool.query(
-      `SELECT * FROM likes WHERE form_id = $1`,
-      [formId]
-    );
+    const likes = await pool.query(`SELECT * FROM likes WHERE form_id = $1`, [
+      formId,
+    ]);
 
     // 8. Combine all data into a single response
     const result = {
@@ -1133,7 +1279,7 @@ app.get("/forms/:formId/details", async (req, res) => {
       answerOptions: answerOptions.rows,
       answers: answers.rows,
       comments: comments.rows,
-      likes: likes.rows
+      likes: likes.rows,
     };
 
     res.status(200).json(result);
@@ -1184,5 +1330,5 @@ app.get("/users/search", async (req, res) => {
 });
 
 app.listen(5000, () => {
-  console.log("Server has started on port 5000")
+  console.log("Server has started on port 5000");
 });
