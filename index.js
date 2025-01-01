@@ -432,7 +432,7 @@ app.get("/eform/:page_id", async (req, res) => {
       SELECT 
         f.form_id, f.page_id, f.title, f.description, f.descriptionMarkdown, f.topic, f.image, f.is_public, 
         f.creator_id, f.created_at, f.updated_at, f.titlemarkdown, f.form_type,
-        q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results, q.is_with_score, q.score, q.correct_answer,
+        q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results, q.is_with_score, q.score, q.correct_answer, q.format,
         ao.option_id, ao.option_text, ao.position AS option_position, ao.is_correct,
         ft.tag_id, t.tag_text,
         ac.user_id AS access_user_id, u.user_email AS access_user_email, u.user_name AS access_user_name
@@ -491,6 +491,7 @@ app.get("/eform/:page_id", async (req, res) => {
             is_with_score: row.is_with_score,
             score: row.score,
             correct_answer: row.correct_answer,
+            format: row.format,
             options: []
           });
 
