@@ -2,12 +2,15 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const pool = require("./db");
+const errorHandler = required("./errorHandler");
 
 // middleware
 const allowedOrigins = [
   "http://localhost:3000", // Development
   "https://forms-project-c77c1.web.app", // Production
 ];
+
+app.use(errorHandler);
 
 app.use(
   cors({
