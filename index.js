@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const pool = require("./db");
-const errorHandler = required("./errorHandler");
+const errorHandler = require("./errorHandler");
 
 // middleware
 const allowedOrigins = [
