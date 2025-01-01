@@ -682,7 +682,7 @@ app.put("/forms/edit/:formId", async (req, res) => {
       } else {
         const newQuestion = await pool.query(
           `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
-           VALUES ($1, $2, $3, $4, $5, $6) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
            RETURNING question_id`,
           [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
         );
