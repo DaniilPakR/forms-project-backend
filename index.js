@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const pool = require("./db");
+const errorHandler = require("./errorHandler");
 
 // middleware
 const allowedOrigins = [
@@ -27,7 +28,6 @@ app.use(express.json());
 // ROUTES 
 
 app.use((req, res, next) => {
-  console.log("Origin:", req.headers.origin);
   next();
 });
 
@@ -723,14 +723,11 @@ app.put("/forms/edit/:formId", async (req, res) => {
     await pool.query("COMMIT");
     res.status(200).json({ message: "Form updated successfully." });
   } catch (error) {
-    console.error("Error updating form:", error);
+    console.error("Error updating formss:", error.message);
     await pool.query("ROLLBACK");
     res.status(500).json({ error: "Internal server error." });
   }
 });
-
-
-
 
 app.get('/tables', async (req, res) => {
   try {
@@ -1182,6 +1179,8 @@ app.get("/users/search", async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 });
+
+app.use(errorHandler)
 
 app.listen(5000, () => {
   console.log("Server has started on port 5000")
