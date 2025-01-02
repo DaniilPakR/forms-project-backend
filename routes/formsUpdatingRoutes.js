@@ -138,6 +138,106 @@ router.post("/forms/create", async (req, res) => {
   }
 });
 
+// router.get("/eform/:page_id", async (req, res) => {
+//   try {
+//     const { page_id } = req.params;
+
+//     const query = `
+//       SELECT 
+//         f.form_id, f.page_id, f.title, f.description, f.descriptionMarkdown, f.topic, f.image, f.is_public, 
+//         f.creator_id, f.created_at, f.updated_at, f.titlemarkdown,
+//         q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results,
+//         ao.option_id, ao.option_text, ao.position AS option_position, ao.is_correct,
+//         ft.tag_id, t.tag_text,
+//         ac.user_id AS access_user_id, u.user_email AS access_user_email, u.user_name AS access_user_name
+//       FROM forms f
+//       LEFT JOIN questions q ON f.form_id = q.form_id
+//       LEFT JOIN answer_options ao ON q.question_id = ao.question_id
+//       LEFT JOIN form_tags ft ON f.form_id = ft.form_id
+//       LEFT JOIN tags t ON ft.tag_id = t.tag_id
+//       LEFT JOIN access_control ac ON f.form_id = ac.form_id
+//       LEFT JOIN users u ON ac.user_id = u.user_id
+//       WHERE f.page_id = $1
+//       ORDER BY q.position, ao.position;
+//     `;
+
+//     const result = await pool.query(query, [page_id]);
+
+//     if (!result.rows.length) {
+//       return res.status(404).json({ error: "No form found with the given page_id" });
+//     }
+
+//     const form = {
+//       form_id: result.rows[0].form_id,
+//       page_id: result.rows[0].page_id,
+//       title: result.rows[0].title,
+//       description: result.rows[0].description,
+//       descriptionMarkdown: result.rows[0].descriptionmarkdown,
+//       topic: result.rows[0].topic,
+//       image_url: result.rows[0].image,
+//       is_public: result.rows[0].is_public,
+//       creator_id: result.rows[0].creator_id,
+//       created_at: result.rows[0].created_at,
+//       updated_at: result.rows[0].updated_at,
+//       titleMarkdown: result.rows[0].titlemarkdown,
+//       tags: [],
+//       questions: [],
+//       users_with_access: []
+//     };
+
+//     const questionMap = {};
+//     const tagMap = {};
+//     const accessMap = {};
+
+//     for (const row of result.rows) {
+//       // Process questions and options
+//       if (row.question_id) {
+//         if (!questionMap[row.question_id]) {
+//           questionMap[row.question_id] = {
+//             question_id: row.question_id,
+//             question_text: row.question_text,
+//             question_type: row.question_type,
+//             is_required: row.is_required,
+//             position: row.position,
+//             show_in_results: row.show_in_results,
+//             options: []
+//           };
+//           form.questions.push(questionMap[row.question_id]);
+//         }
+//         if (row.option_id) {
+//           questionMap[row.question_id].options.push({
+//             option_id: row.option_id,
+//             option_text: row.option_text,
+//             position: row.option_position,
+//             is_correct: row.is_correct
+//           });
+//         }
+//       }
+
+//       // Process tags
+//       if (row.tag_id && !tagMap[row.tag_id]) {
+//         tagMap[row.tag_id] = true;
+//         form.tags.push({ tag_id: row.tag_id, tag_text: row.tag_text });
+//       }
+
+//       // Process access control
+//       if (!form.is_public && row.access_user_id && !accessMap[row.access_user_id]) {
+//         accessMap[row.access_user_id] = true;
+//         form.users_with_access.push({
+//           user_id: row.access_user_id,
+//           user_email: row.access_user_email,
+//           user_name: row.access_user_name
+//         });
+//       }
+//     }
+
+//     res.json(form);
+//   } catch (err) {
+//     console.error("Error fetching form data:", err.message);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
 router.get("/eform/:page_id", async (req, res) => {
   try {
     const { page_id } = req.params;
@@ -185,51 +285,63 @@ router.get("/eform/:page_id", async (req, res) => {
       users_with_access: []
     };
 
-    const questionMap = {};
-    const tagMap = {};
-    const accessMap = {};
-
-    for (const row of result.rows) {
-      // Process questions and options
-      if (row.question_id) {
-        if (!questionMap[row.question_id]) {
-          questionMap[row.question_id] = {
-            question_id: row.question_id,
-            question_text: row.question_text,
-            question_type: row.question_type,
-            is_required: row.is_required,
-            position: row.position,
-            show_in_results: row.show_in_results,
-            options: []
-          };
-          form.questions.push(questionMap[row.question_id]);
+    const { questions, tags, users_with_access } = result.rows.reduce(
+      (acc, row) => {
+        // Process questions and options
+        if (row.question_id) {
+          if (!acc.questionsMap[row.question_id]) {
+            acc.questionsMap[row.question_id] = {
+              question_id: row.question_id,
+              question_text: row.question_text,
+              question_type: row.question_type,
+              is_required: row.is_required,
+              position: row.position,
+              show_in_results: row.show_in_results,
+              options: []
+            };
+            acc.questions.push(acc.questionsMap[row.question_id]);
+          }
+          if (row.option_id) {
+            acc.questionsMap[row.question_id].options.push({
+              option_id: row.option_id,
+              option_text: row.option_text,
+              position: row.option_position,
+              is_correct: row.is_correct
+            });
+          }
         }
-        if (row.option_id) {
-          questionMap[row.question_id].options.push({
-            option_id: row.option_id,
-            option_text: row.option_text,
-            position: row.option_position,
-            is_correct: row.is_correct
+
+        // Process tags
+        if (row.tag_id && !acc.tagsMap[row.tag_id]) {
+          acc.tagsMap[row.tag_id] = true;
+          acc.tags.push({ tag_id: row.tag_id, tag_text: row.tag_text });
+        }
+
+        // Process access control
+        if (!form.is_public && row.access_user_id && !acc.accessMap[row.access_user_id]) {
+          acc.accessMap[row.access_user_id] = true;
+          acc.users_with_access.push({
+            user_id: row.access_user_id,
+            user_email: row.access_user_email,
+            user_name: row.access_user_name
           });
         }
-      }
 
-      // Process tags
-      if (row.tag_id && !tagMap[row.tag_id]) {
-        tagMap[row.tag_id] = true;
-        form.tags.push({ tag_id: row.tag_id, tag_text: row.tag_text });
+        return acc;
+      },
+      {
+        questionsMap: {},
+        tagsMap: {},
+        accessMap: {},
+        questions: [],
+        tags: [],
+        users_with_access: []
       }
+    );
 
-      // Process access control
-      if (!form.is_public && row.access_user_id && !accessMap[row.access_user_id]) {
-        accessMap[row.access_user_id] = true;
-        form.users_with_access.push({
-          user_id: row.access_user_id,
-          user_email: row.access_user_email,
-          user_name: row.access_user_name
-        });
-      }
-    }
+    form.questions = questions;
+    form.tags = tags;
+    form.users_with_access = users_with_access;
 
     res.json(form);
   } catch (err) {
@@ -237,6 +349,7 @@ router.get("/eform/:page_id", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 router.put("/forms/edits/:formId", async (req, res) => {
   const { formId } = req.params;
