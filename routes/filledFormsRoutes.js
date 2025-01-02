@@ -29,11 +29,19 @@ router.post("/filled-forms/submit", async (req, res) => {
       await pool.query(
         `INSERT INTO answers (filled_form_id, question_id, answer_text, answer_value, question_type, created_at  ) 
          VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [filledFormId, question_id, answer_text || null, JSON.stringify(answer_value) || null, question_type ]
+        [
+          filledFormId,
+          question_id,
+          answer_text || null,
+          JSON.stringify(answer_value) || null,
+          question_type,
+        ]
       );
     }
 
-    res.status(201).json({ message: "Form submitted successfully.", filledFormId });
+    res
+      .status(201)
+      .json({ message: "Form submitted successfully.", filledFormId });
   } catch (error) {
     console.error("Error submitting filled form:", error.message);
     res.status(500).json({ error: "Internal server error." });
@@ -64,13 +72,99 @@ router.get("/filled-forms/:user_id", async (req, res) => {
     const result = await pool.query(query, [user_id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No filled forms found for this user." });
+      return res
+        .status(404)
+        .json({ message: "No filled forms found for this user." });
     }
 
     res.status(200).json({ filledForms: result.rows });
   } catch (err) {
     console.error("Error fetching filled forms:", err);
-    res.status(500).json({ error: "An error occurred while fetching filled forms." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching filled forms." });
+  }
+});
+
+router.get("/view-filled-form/:id", async (req, res) => {
+  try {
+    const filledFormId = req.params.id;
+
+    // Fetch the filled form
+    const filledForm = await pool.query(
+      `SELECT * FROM filled_forms WHERE filled_form_id = $1`,
+      [filledFormId]
+    );
+
+    const filledFormRows = filledForm.rows;
+
+    // Fetch form data based on form_id from filled form
+    const formData = await pool.query(
+      `SELECT * FROM forms WHERE form_id = $1`,
+      [filledFormRows[0].form_id]
+    );
+
+    // Fetch questions for the form
+    const questions = await pool.query(
+      `SELECT * FROM questions WHERE form_id = $1`,
+      [filledFormRows[0].form_id]
+    );
+
+    const newAnswers = await pool.query(
+      `SELECT * FROM answers WHERE filled_form_id = $1`,
+      [filledFormId]
+    );
+
+    let answersObject = {};
+    newAnswers.rows.forEach((answer) => {
+      answersObject[answer.question_id] = answer;
+    })
+
+    let answersOptions = [];
+    let answers = [];
+    
+    // Process each question and gather answer options
+    for (const question of questions.rows) {
+      const answerOptions = await pool.query(
+        `SELECT * FROM answer_options WHERE question_id = $1`,
+        [question.question_id]
+      );
+
+      const optionsArray = answerOptions.rows.map(option => ({
+        option_id: option.option_id,
+        option_text: option.option_text,
+        is_correct: option.is_correct,
+        position: option.position
+      }));
+
+      // Fetch answers for the question
+      const questionAnswers = await pool.query(
+        `SELECT * FROM answers WHERE question_id = $1 AND filled_form_id = $2`,
+        [question.question_id, filledFormId]
+      );
+
+      // Store answers
+      answers.push(questionAnswers.rows);
+
+      answersOptions.push(optionsArray);
+    }
+
+    const result = {
+      filledForm: filledFormRows[0],
+      form: formData.rows[0],
+      questions: questions.rows.map((question, index) => ({
+        ...question,
+        options: answersOptions[index], // Add answer options object
+        answers: answers[index], // Add answers for the question
+      })),
+      answers: answersObject,
+    };
+
+    // Return the response with the modified structure
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching filled form:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
