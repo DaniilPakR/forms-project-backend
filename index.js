@@ -13,6 +13,14 @@ const likesRoutes = require("./routes/likesRoutes");
 const commentsRoutes = require("./routes/commentsRoutes");
 const searchRoutes = require("./routes/searchRoutes");
 
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+  cloud_name: 'dmi1xxumf',
+  api_key: '352349418547498',
+  api_secret: 'KJwBO8rslvNxv59SmwHKwSyV4vg',
+});
+
 // middleware
 const allowedOrigins = [
   "http://localhost:3000", // Development
@@ -56,6 +64,21 @@ app.get('/tables', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     res.status(500).send('Error fetching table structures');
+  }
+});
+
+app.delete('/delete-image', async (req, res) => {
+  const { public_id } = req.body;
+
+  if (!public_id) {
+    return res.status(400).json({ error: 'Public ID is required' });
+  }
+
+  try {
+    const result = await cloudinary.uploader.destroy(public_id);
+    res.status(200).json({ message: 'Image deleted successfully', result });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete image', details: error });
   }
 });
 
