@@ -118,11 +118,11 @@ router.get("/view-filled-form/:id", async (req, res) => {
     let answersObject = {};
     newAnswers.rows.forEach((answer) => {
       answersObject[answer.question_id] = answer;
-    })
+    });
 
     let answersOptions = [];
     let answers = [];
-    
+
     // Process each question and gather answer options
     for (const question of questions.rows) {
       const answerOptions = await pool.query(
@@ -130,11 +130,11 @@ router.get("/view-filled-form/:id", async (req, res) => {
         [question.question_id]
       );
 
-      const optionsArray = answerOptions.rows.map(option => ({
+      const optionsArray = answerOptions.rows.map((option) => ({
         option_id: option.option_id,
         option_text: option.option_text,
         is_correct: option.is_correct,
-        position: option.position
+        position: option.position,
       }));
 
       // Fetch answers for the question
@@ -165,6 +165,67 @@ router.get("/view-filled-form/:id", async (req, res) => {
   } catch (error) {
     console.error("Error fetching filled form:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/get-filled-forms-by-user/:id", async (req, res) => {
+  console.log(req.params.id)
+  try {
+    const userId = req.params.id;
+
+    const result = await pool.query(
+      "SELECT 1 FROM filled_forms WHERE user_id = $1 LIMIT 1",
+      [userId]
+    );
+
+    if (result.rows.length > 0) {
+      res.json({ exists: true });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch (err) {
+    console.error("Error checking filled forms:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.delete("/delete-filled-form/:user_id", async (req, res) => {
+  try {
+    const userId = req.params.user_id;
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required." });
+    }
+
+    const filledForm = await pool.query(
+      `SELECT filled_form_id FROM filled_forms WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (filledForm.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ error: "Filled form not found for the given User ID." });
+    }
+
+    const filledFormId = filledForm.rows[0].filled_form_id;
+
+    await pool.query(`DELETE FROM answers WHERE filled_form_id = $1`, [
+      filledFormId,
+    ]);
+
+    const result = await pool.query(
+      `DELETE FROM filled_forms WHERE filled_form_id = $1 RETURNING *`,
+      [filledFormId]
+    );
+
+    res.status(200).json({
+      message: "Filled form and related data deleted successfully.",
+      deletedForm: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error deleting filled form:", error.message);
+    res.status(500).json({ error: "Internal server error." });
   }
 });
 

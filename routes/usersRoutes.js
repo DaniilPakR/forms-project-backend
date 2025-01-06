@@ -15,6 +15,29 @@ router.get("/users/get", async (req, res) => {
   }
 })
 
+router.get("/get-user-info/:id", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    const result = await pool.query(
+      "SELECT is_admin, is_blocked FROM users WHERE user_id = $1", 
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = result.rows[0];
+    res.status(200).json(user);
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+
 // DELETE route for deleting users
 router.delete("/users/delete", async (req, res) => {
   const { userIds } = req.body;
