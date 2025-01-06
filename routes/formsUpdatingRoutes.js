@@ -17,6 +17,7 @@ router.post("/forms/create", async (req, res) => {
       titlemarkdown,
       tags,
       usersWithAccess,
+      imageVersion,
     } = req.body;
 
     if (!title || !creatorId || !questions || questions.length === 0) {
@@ -27,10 +28,10 @@ router.post("/forms/create", async (req, res) => {
 
     // Insert the form into the "forms" table
     const newForm = await pool.query(
-      `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9) 
+      `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown, image_version) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9, $10) 
        RETURNING form_id`,
-      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown]
+      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown, imageVersion || '']
     );
 
     const formId = newForm.rows[0].form_id;
@@ -245,7 +246,7 @@ router.get("/eform/:page_id", async (req, res) => {
     const query = `
       SELECT 
         f.form_id, f.page_id, f.title, f.description, f.descriptionMarkdown, f.topic, f.image, f.is_public, 
-        f.creator_id, f.created_at, f.updated_at, f.titlemarkdown,
+        f.creator_id, f.created_at, f.updated_at, f.titlemarkdown, f.image_version,
         q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results,
         ao.option_id, ao.option_text, ao.position AS option_position, ao.is_correct,
         ft.tag_id, t.tag_text,
@@ -282,7 +283,8 @@ router.get("/eform/:page_id", async (req, res) => {
       titleMarkdown: result.rows[0].titlemarkdown,
       tags: [],
       questions: [],
-      users_with_access: []
+      users_with_access: [],
+      image_version: result.rows[0].image_version,
     };
 
     const { questions, tags, users_with_access } = result.rows.reduce(
@@ -365,7 +367,8 @@ router.put("/forms/edits/:formId", async (req, res) => {
     questions,
     pageId,
     tags, // array of tags as strings
-    accessControlUsers
+    accessControlUsers,
+    imageVersion,
   } = req.body;
 
   try {
@@ -376,9 +379,9 @@ router.put("/forms/edits/:formId", async (req, res) => {
     await pool.query(
       `UPDATE forms 
        SET title = $1, titlemarkdown = $2, description = $3, descriptionmarkdown = $4, topic = $5, image = $6, 
-           is_public = $7, updated_at = NOW(), page_id = $8
-       WHERE form_id = $9`,
-      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, formId]
+           is_public = $7, updated_at = NOW(), page_id = $8, image_version = $9
+       WHERE form_id = $10`,
+      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, imageVersion, formId]
     );
 
     if (isPublic) {
