@@ -4,7 +4,7 @@ const pool = require("../db");
 
 router.post("/filled-forms/submit", async (req, res) => {
   try {
-    const { form_id, user_id, user_name, user_email, answers } = req.body;
+    const { form_id, user_id, user_name, user_email, answers, score } = req.body;
 
     if (!form_id || !user_id || !answers || answers.length === 0) {
       return res
@@ -14,10 +14,10 @@ router.post("/filled-forms/submit", async (req, res) => {
 
     // Insert into filled_forms table
     const newFilledForm = await pool.query(
-      `INSERT INTO filled_forms (form_id, user_id, user_name, user_email, filled_at) 
-       VALUES ($1, $2, $3, $4, NOW()) 
+      `INSERT INTO filled_forms (form_id, user_id, user_name, user_email, score, filled_at) 
+       VALUES ($1, $2, $3, $4, $5, NOW()) 
        RETURNING filled_form_id`,
-      [form_id, user_id, user_name, user_email]
+      [form_id, user_id, user_name, user_email, score]
     );
 
     const filledFormId = newFilledForm.rows[0].filled_form_id;
