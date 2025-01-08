@@ -58,7 +58,8 @@ router.get("/filled-forms/:user_id", async (req, res) => {
         f.title, 
         f.created_at, 
         f.page_id,
-        ff.filled_at
+        ff.filled_at,
+        ff.filled_form_id
       FROM 
         filled_forms ff
       INNER JOIN 
