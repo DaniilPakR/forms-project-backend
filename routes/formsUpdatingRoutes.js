@@ -18,6 +18,7 @@ router.post("/forms/create", async (req, res) => {
       tags,
       usersWithAccess,
       imageVersion,
+      formType,
     } = req.body;
 
     if (!title || !creatorId || !questions || questions.length === 0) {
@@ -28,10 +29,10 @@ router.post("/forms/create", async (req, res) => {
 
     // Insert the form into the "forms" table
     const newForm = await pool.query(
-      `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown, image_version) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9, $10) 
+      `INSERT INTO forms (title, description, descriptionmarkdown, topic, image, is_public, creator_id, created_at, updated_at, page_id, titlemarkdown, image_version, form_type) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8, $9, $10, $11) 
        RETURNING form_id`,
-      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown, imageVersion || '']
+      [title, description, descriptionmarkdown, topic, imageUrl, isPublic, creatorId, pageId, titlemarkdown, imageVersion || '', formType]
     );
 
     const formId = newForm.rows[0].form_id;
@@ -41,10 +42,10 @@ router.post("/forms/create", async (req, res) => {
       const { questionTitle, questionType, required, options, showInResults, is_with_score, score, correct_answer } = question;
 
       const newQuestion = await pool.query(
-        `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
+        `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
          RETURNING question_id`,
-        [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults]
+        [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
       );
 
       const questionId = newQuestion.rows[0].question_id;
@@ -246,8 +247,8 @@ router.get("/eform/:page_id", async (req, res) => {
     const query = `
       SELECT 
         f.form_id, f.page_id, f.title, f.description, f.descriptionMarkdown, f.topic, f.image, f.is_public, 
-        f.creator_id, f.created_at, f.updated_at, f.titlemarkdown, f.image_version,
-        q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results,
+        f.creator_id, f.created_at, f.updated_at, f.titlemarkdown, f.image_version, f.form_type,
+        q.question_id, q.question_text, q.question_type, q.is_required, q.position, q.show_in_results, is_with_score, score, correct_answer,
         ao.option_id, ao.option_text, ao.position AS option_position, ao.is_correct,
         ft.tag_id, t.tag_text,
         ac.user_id AS access_user_id, u.user_email AS access_user_email, u.user_name AS access_user_name
@@ -285,6 +286,7 @@ router.get("/eform/:page_id", async (req, res) => {
       questions: [],
       users_with_access: [],
       image_version: result.rows[0].image_version,
+      form_type: result.rows[0].form_type,
     };
 
     const { questions, tags, users_with_access } = result.rows.reduce(
@@ -299,6 +301,9 @@ router.get("/eform/:page_id", async (req, res) => {
               is_required: row.is_required,
               position: row.position,
               show_in_results: row.show_in_results,
+              is_with_score: row.is_with_score,
+              score: row.score,
+              correct_answer: row.correct_answer,
               options: []
             };
             acc.questions.push(acc.questionsMap[row.question_id]);
@@ -369,6 +374,7 @@ router.put("/forms/edits/:formId", async (req, res) => {
     tags, // array of tags as strings
     accessControlUsers,
     imageVersion,
+    formType,
   } = req.body;
 
   try {
@@ -379,9 +385,9 @@ router.put("/forms/edits/:formId", async (req, res) => {
     await pool.query(
       `UPDATE forms 
        SET title = $1, titlemarkdown = $2, description = $3, descriptionmarkdown = $4, topic = $5, image = $6, 
-           is_public = $7, updated_at = NOW(), page_id = $8, image_version = $9
-       WHERE form_id = $10`,
-      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, imageVersion, formId]
+           is_public = $7, updated_at = NOW(), page_id = $8, image_version = $9, form_type = $10
+       WHERE form_id = $11`,
+      [title, titlemarkdown, description, descriptionmarkdown, topic, imageUrl, isPublic, pageId, imageVersion, formType, formId]
     );
 
     if (isPublic) {
@@ -484,23 +490,23 @@ router.put("/forms/edits/:formId", async (req, res) => {
     }
 
     for (const question of questions) {
-      const { questionId, questionTitle, questionType, required, options, showInResults } = question;
+      const { questionId, questionTitle, questionType, required, options, showInResults, is_with_score, score, correct_answer } = question;
 
       let newQuestionId = questionId;
 
       if (questionId && existingQuestionIds.includes(questionId)) {
         await pool.query(
           `UPDATE questions 
-           SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5 
-           WHERE question_id = $6`,
-          [questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, questionId]
+           SET question_text = $1, question_type = $2, is_required = $3, position = $4, show_in_results = $5, is_with_score = $6, score = $7, correct_answer = $8
+           WHERE question_id = $9`,
+          [questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer, questionId]
         );
       } else {
         const newQuestion = await pool.query(
-          `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results) 
-           VALUES ($1, $2, $3, $4, $5, $6) 
+          `INSERT INTO questions (form_id, question_text, question_type, is_required, position, show_in_results, is_with_score, score, correct_answer) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
            RETURNING question_id`,
-          [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults]
+          [formId, questionTitle, questionType, required, questions.indexOf(question) + 1, showInResults, is_with_score, score, correct_answer]
         );
         newQuestionId = newQuestion.rows[0].question_id;
       }
